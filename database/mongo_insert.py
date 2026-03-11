@@ -7,17 +7,21 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client["threat_intel"]
 collection = db["malicious_ips"]
 
+def insert_ip(ip, source):
 
-def insert_ip(ip):
+    risk_score = 80
+
+    if source == "spamhaus":
+        risk_score = 90
 
     data = {
         "ip": ip,
-        "source": "abuse_ch",
-        "risk_score": 80,
+        "source": source,
+        "risk_score": risk_score,
         "date_added": datetime.now(timezone.utc)
     }
 
-    # avoid duplicates
+avoid duplicates
     if not collection.find_one({"ip": ip}):
         collection.insert_one(data)
         print("Inserted:", ip)

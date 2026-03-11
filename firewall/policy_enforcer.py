@@ -1,7 +1,7 @@
 import subprocess
+import time
 from pymongo import MongoClient
 
-# MongoDB connection
 client = MongoClient("mongodb://localhost:27017/")
 db = client["threat_intel"]
 collection = db["malicious_ips"]
@@ -9,24 +9,46 @@ collection = db["malicious_ips"]
 
 def block_ip(ip):
 
-    command = ["sudo", "iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"]
+    command = ["iptables", "-C", "INPUT", "-s", ip, "-j", "DROP"]
 
-    try:
-        subprocess.run(command, check=True)
-        print("Blocked IP:", ip)
-    except Exception as e:
-        print("Error blocking IP:", e)
+    check = subprocess.run(command, stderr=subprocess.PIPE)
+
+    if check.returncode == 0:
+        return
+
+    command = ["iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"]
+
+    subprocess.run(command)
+
+    print("Blocked:", ip)
+
+
+def unblock_ip(ip):
+
+    command = ["iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"]
+
+    subprocess.run(command)
+
+    print("Unblocked:", ip)
 
 
 def enforce_policy():
 
-    threats = collection.find()
+    while True:
 
-    for threat in threats:
-        ip = threat["ip"]
-        block_ip(ip)
+        threats = collection.find({"risk_score": {"$gte": 80}})
+
+        for threat in threats:
+
+            ip = threat["ip"]
+
+            block_ip(ip)
+
+        time.sleep(60)
 
 
 if __name__ == "__main__":
-    print("Starting firewall policy enforcement...")
+
+    print("Starting firewall policy enforcer...")
+
     enforce_policy()

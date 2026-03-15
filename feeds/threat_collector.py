@@ -10,16 +10,19 @@ collection = db["malicious_ips"]
 # Multiple OSINT feeds
 FEEDS = {
     "abuse_ch": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt",
-    "spamhaus": "https://www.spamhaus.org/drop/drop.txt"
+    "spamhaus": "https://www.spamhaus.org/drop/drop.txt",
+    "blocklist_de": "https://lists.blocklist.de/lists/all.txt"
 }
 
 
-def get_risk_score(source):
+def calculate_risk(source):
 
     if source == "spamhaus":
         return 90
     elif source == "abuse_ch":
         return 80
+    elif source == "blocklist_de":
+        return 75
     else:
         return 50
 
@@ -32,13 +35,13 @@ def insert_ip(ip, source):
     data = {
         "ip": ip,
         "source": source,
-        "risk_score": get_risk_score(source),
+        "risk_score": calculate_risk(source),
         "date_added": datetime.now(timezone.utc)
     }
 
     collection.insert_one(data)
 
-    print("Inserted:", ip, "| Source:", source)
+    print("Inserted:", ip, "| source:", source)
 
 
 def fetch_feed(source, url):
@@ -61,9 +64,9 @@ def fetch_feed(source, url):
         print("Error fetching", source, e)
 
 
-def collect_all_feeds():
+def collect_feeds():
 
-    print("Collecting threat feeds...")
+    print("Collecting threat intelligence feeds...")
 
     for source, url in FEEDS.items():
 
@@ -74,4 +77,4 @@ def collect_all_feeds():
 
 if __name__ == "__main__":
 
-    collect_all_feeds()
+    collect_feeds()

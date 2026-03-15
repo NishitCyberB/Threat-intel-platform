@@ -11,19 +11,21 @@ collection = db["malicious_ips"]
 @app.route("/")
 def dashboard():
 
-    threats = list(collection.find())
+    total = collection.count_documents({})
 
-    total = len(threats)
+    pipeline = [
+        {"$group": {"_id": "$source", "count": {"$sum": 1}}}
+    ]
 
-    response = f"Total threats: {total}\n\n"
+    sources = list(collection.aggregate(pipeline))
 
-    for t in threats[:10]:
+    output = f"Total Threats: {total}\n\nThreats by Source:\n"
 
-        response += f"{t['ip']} | {t['source']} | risk {t['risk_score']}\n"
+    for s in sources:
+        output += f"{s['_id']} → {s['count']}\n"
 
-    return "<pre>" + response + "</pre>"
+    return "<pre>" + output + "</pre>"
 
 
 if __name__ == "__main__":
-
     app.run(port=5000)

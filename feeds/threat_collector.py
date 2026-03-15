@@ -26,22 +26,33 @@ def calculate_risk(source):
     else:
         return 50
 
+def log_event(message):
+
+    with open("logs/threat_log.txt", "a") as log:
+
+        timestamp = datetime.now(timezone.utc)
+
+        log.write(f"{timestamp} | {message}\n")
 
 def insert_ip(ip, source):
 
     if collection.find_one({"ip": ip}):
         return
 
+    threat_type = "botnet"
+
     data = {
         "ip": ip,
         "source": source,
+        "threat_type": threat_type,
         "risk_score": calculate_risk(source),
+        "status": "active",
         "date_added": datetime.now(timezone.utc)
     }
 
     collection.insert_one(data)
 
-    print("Inserted:", ip, "| source:", source)
+    log_event(f"Inserted threat {ip} from {source}")
 
 
 def fetch_feed(source, url):

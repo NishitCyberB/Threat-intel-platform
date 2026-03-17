@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Threat Intelligence Dashboard</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #38bdf8;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 50%;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #444;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #1e293b;
+        }
+
+        tr:nth-child(even) {
+            background: #1f2937;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            margin: 10px 0;
+            width: 300px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Threat Intelligence Platform</h1>
+
+<div class="card">
+<h2>Total Threats</h2>
+<p>{{ total }}</p>
+</div>
+
+<h2>Threats by Source</h2>
+
+<table>
+<tr>
+<th>Source</th>
+<th>Count</th>
+</tr>
+
+{% for s in sources %}
+<tr>
+<td>{{ s._id }}</td>
+<td>{{ s.count }}</td>
+</tr>
+{% endfor %}
+
+</table>
+
+<h2>Recent Threats</h2>
+
+<table>
+<tr>
+<th>IP</th>
+<th>Source</th>
+<th>Risk Score</th>
+</tr>
+
+{% for t in threats %}
+<tr>
+<td>{{ t.ip }}</td>
+<td>{{ t.source }}</td>
+<td>{{ t.risk_score }}</td>
+</tr>
+{% endfor %}
+
+</table>
+
+</body>
+</html>

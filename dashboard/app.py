@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from pymongo import MongoClient
 
 app = Flask(__name__)
@@ -19,12 +19,14 @@ def dashboard():
 
     sources = list(collection.aggregate(pipeline))
 
-    output = f"Total Threats: {total}\n\nThreats by Source:\n"
+    threats = list(collection.find().sort("date_added", -1).limit(10))
 
-    for s in sources:
-        output += f"{s['_id']} → {s['count']}\n"
-
-    return "<pre>" + output + "</pre>"
+    return render_template(
+        "dashboard.html",
+        total=total,
+        sources=sources,
+        threats=threats
+    )
 
 
 if __name__ == "__main__":

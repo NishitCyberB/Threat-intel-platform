@@ -1,20 +1,41 @@
 import requests
 from pymongo import MongoClient
 from datetime import datetime, timezone
+import re
+import os
 
+# -----------------------------
 # MongoDB connection
+# -----------------------------
 client = MongoClient("mongodb://localhost:27017/")
 db = client["threat_intel"]
 collection = db["malicious_ips"]
 
-# Multiple OSINT feeds
+# -----------------------------
+# Absolute log path (IMPORTANT)
+# -----------------------------
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_PATH = os.path.join(BASE_DIR, "logs", "threat_log.txt")
+
+# -----------------------------
+# Threat Feeds
+# -----------------------------
 FEEDS = {
     "abuse_ch": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt",
     "spamhaus": "https://www.spamhaus.org/drop/drop.txt",
     "blocklist_de": "https://lists.blocklist.de/lists/all.txt"
 }
 
+# -----------------------------
+# IP Validation
+# -----------------------------
+def is_valid_ip(ip):
+    pattern = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+    return re.match(pattern, ip)
 
+# -----------------------------
+# Risk Scoring
+# -----------------------------
 def calculate_risk(source):
 
     if source == "spamhaus":
@@ -26,27 +47,38 @@ def calculate_risk(source):
     else:
         return 50
 
+# -----------------------------
+# Logging
+# -----------------------------
 def log_event(message):
 
-    with open("logs/threat_log.txt", "a") as log:
+    with open(LOG_PATH, "a") as log:
 
         timestamp = datetime.now(timezone.utc)
 
         log.write(f"{timestamp} | {message}\n")
 
+# -----------------------------
+# Insert IP
+# -----------------------------
 def insert_ip(ip, source):
 
-    if collection.find_one({"ip": ip}):
+    ip = ip.strip()
+
+    # Skip invalid IP
+    if not is_valid_ip(ip):
         return
 
-    threat_type = "botnet"
+    # Skip duplicate
+    if collection.find_one({"ip": ip}):
+        return
 
     data = {
         "ip": ip,
         "source": source,
-        "threat_type": threat_type,
+        "threat_type": "botnet",
         "risk_score": calculate_risk(source),
-        "status": "active",
+        "status": "new",   # IMPORTANT FIX
         "date_added": datetime.now(timezone.utc)
     }
 
@@ -54,12 +86,16 @@ def insert_ip(ip, source):
 
     log_event(f"Inserted threat {ip} from {source}")
 
-
+# -----------------------------
+# Fetch Feed
+# -----------------------------
 def fetch_feed(source, url):
 
     try:
 
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
+
+        count = 0
 
         for line in response.text.split("\n"):
 
@@ -70,11 +106,21 @@ def fetch_feed(source, url):
 
             insert_ip(ip, source)
 
+            count += 1
+
+            # LIMIT for performance (IMPORTANT)
+            if count >= 100:
+                break
+
+        print(f"{source}: collected {count} IPs")
+
     except Exception as e:
 
         print("Error fetching", source, e)
 
-
+# -----------------------------
+# Main Collector
+# -----------------------------
 def collect_feeds():
 
     print("Collecting threat intelligence feeds...")
@@ -85,7 +131,9 @@ def collect_feeds():
 
         fetch_feed(source, url)
 
-
+# -----------------------------
+# Run
+# -----------------------------
 if __name__ == "__main__":
 
     collect_feeds()

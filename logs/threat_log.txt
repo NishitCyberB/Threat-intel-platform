@@ -369,3 +369,9 @@
 2026-03-23 10:49:49.944043+00:00 | Inserted threat 101.126.82.218 from blocklist_de
 2026-03-23 10:49:49.951486+00:00 | Inserted threat 101.126.89.35 from blocklist_de
 2026-03-23 10:49:49.959962+00:00 | Inserted threat 101.13.3.207 from blocklist_de
+2026-03-24 06:00:55.487876+00:00 | Inserted threat 1.34.51.163 from blocklist_de
+2026-03-24 06:00:55.497755+00:00 | Inserted threat 1.85.42.195 from blocklist_de
+2026-03-24 06:00:55.521853+00:00 | Inserted threat 1.95.51.38 from blocklist_de
+2026-03-24 06:00:55.599542+00:00 | Inserted threat 101.126.85.76 from blocklist_de
+2026-03-24 06:00:55.615270+00:00 | Inserted threat 101.13.2.183 from blocklist_de
+2026-03-24 06:00:55.630520+00:00 | Inserted threat 101.13.5.39 from blocklist_de

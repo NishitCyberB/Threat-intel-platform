@@ -4,3 +4,5 @@ venv/
 logs/
 .env
 .env
+mongo_data/
+*.log

@@ -1,5 +1,4 @@
 import subprocess
-import time
 import os
 from datetime import datetime
 from pymongo import MongoClient
@@ -19,8 +18,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALERT_LOG = os.path.join(BASE_DIR, "logs", "alerts.txt")
 FIREWALL_LOG = os.path.join(BASE_DIR, "logs", "firewall.log")
 
-# Ensure log files exist
+# Ensure log directory exists
 os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
+
+# Ensure log files exist
 open(ALERT_LOG, "a").close()
 open(FIREWALL_LOG, "a").close()
 
@@ -89,31 +90,9 @@ def unblock_ip(ip):
     except Exception as e:
         print("Error unblocking IP:", ip, e)
 
-# -----------------------------
-# Policy Enforcer Loop
-# -----------------------------
-def enforce_policy():
-
-    while True:
-
-        threats = collection.find({
-            "risk_score": {"$gte": 80},
-            "status": {"$ne": "active"}
-        }).limit(50)   # prevent overload
-
-        for threat in threats:
-
-            ip = threat["ip"]
-
-            block_ip(ip)
-
-        time.sleep(60)
 
 # -----------------------------
-# Main Entry
+# IMPORTANT NOTE
 # -----------------------------
-if __name__ == "__main__":
-
-    print("Starting firewall policy enforcer...")
-
-    enforce_policy()
+# ❌ No while loop here
+# ✔ This file is now used by Celery task

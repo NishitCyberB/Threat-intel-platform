@@ -20,21 +20,7 @@ Advanced Threat Intelligence Platform that collects OSINT feeds, stores IOCs in 
 - **Containerization**: Docker + Docker Compose
 - **Firewall**: Linux iptables
 
-## Architecture Diagram
-
-```mermaid
-graph TD
-    A[OSINT Feeds<br>(URLHaus + OpenPhish + AlienVault OTX)] --> B[Threat Collector + Risk Scoring]
-    B --> C[MongoDB<br>(IOC Storage)]
-    C --> D[Sync Script<br>(sync_to_es.py)]
-    D --> E[Elasticsearch<br>(SIEM)]
-    E --> F[Kibana Dashboard]
-    C --> G[Dynamic Policy Enforcer]
-    G --> H[Linux iptables Firewall]
-    F --> I[Rollback UI]
-    I --> G
-
-## Quick Start
+#Quick Start
 
 ```bash
 # Clone repo

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Threat Intelligence Platform</title>
+    <style>
+        body { font-family: Arial; background: #0f172a; color: white; padding: 20px; }
+        h1 { color: #38bdf8; text-align: center; }
+        h2 { color: #60a5fa; margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #1e293b; }
+        th, td { padding: 12px; border-bottom: 1px solid #334155; text-align: left; }
+        th { background: #0f172a; }
+        tr:hover { background: #334155; }
+        .high-risk { color: #f87171; font-weight: bold; }
+        .unblock-btn { background: #ef4444; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+        .unblock-btn:hover { background: #dc2626; }
+    </style>
+</head>
+<body>
+    <h1>Threat Intelligence Platform Dashboard</h1>
+
+    <h2>MongoDB Threats</h2>
+    <table>
+        <tr><th>Value</th><th>Type</th><th>Risk Score</th><th>Source</th><th>Action</th></tr>
+        {% for ioc in mongo_iocs %}
+        <tr>
+            <td>{{ ioc.value }}</td>
+            <td>{{ ioc.type }}</td>
+            <td class="{% if ioc.risk_score >= 70 %}high-risk{% endif %}">{{ ioc.risk_score }}</td>
+            <td>{{ ioc.source }}</td>
+            <td><button class="unblock-btn" onclick="unblock('{{ ioc.value }}')">Unblock</button></td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>Elasticsearch Threats (SIEM)</h2>
+    <table>
+        <tr><th>Value</th><th>Type</th><th>Risk Score</th><th>Source</th><th>Action</th></tr>
+        {% for ioc in es_iocs %}
+        <tr>
+            <td>{{ ioc.value }}</td>
+            <td>{{ ioc.ioc_type }}</td>
+            <td class="{% if ioc.risk_score >= 70 %}high-risk{% endif %}">{{ ioc.risk_score }}</td>
+            <td>{{ ioc.source }}</td>
+            <td><button class="unblock-btn" onclick="unblock('{{ ioc.value }}')">Unblock</button></td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <script>
+        function unblock(value) {
+            if (confirm(`Unblock ${value}?`)) {
+                fetch('/unblock', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({value: value})
+                })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message || data.error);
+                    location.reload();
+                });
+            }
+        }
+    </script>
+</body>
+</html>

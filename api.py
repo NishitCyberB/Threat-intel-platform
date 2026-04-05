@@ -1,209 +1,62 @@
-from flask import Flask, jsonify, request
-from pymongo import MongoClient
-from firewall.policy_enforcer import block_ip, unblock_ip
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
-import jwt
-import datetime
-import bcrypt
+from pymongo import MongoClient
+from elasticsearch import Elasticsearch
+import subprocess
 
-# 🔥 NEW IMPORTS (Rate Limiting)
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-# -----------------------------
-# Load ENV
-# -----------------------------
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
-SECRET_KEY = os.getenv("JWT_SECRET")
-MONGO_URI = os.getenv("MONGO_URI")
+# Connections
+mongo_client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017/threat_intel"))
+db = mongo_client.get_default_database()
 
-# -----------------------------
-# Rate Limiter (GLOBAL)
-# -----------------------------
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["100 per minute"]
-)
+es = Elasticsearch(os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200"))
 
-# -----------------------------
-# MongoDB
-# -----------------------------
-client = MongoClient(MONGO_URI)
-db = client["threat_intel"]
-collection = db["malicious_ips"]
-users_collection = db["users"]
-
-# -----------------------------
-# LOGIN (RBAC + RATE LIMIT)
-# -----------------------------
-@app.route("/login", methods=["POST"])
-@limiter.limit("5 per minute")   # 🔥 protect against brute force
-def login():
-
-    data = request.json
-    username = data.get("username")
-    password = data.get("password")
-
-    if not username or not password:
-        return jsonify({"error": "Username and password required"}), 400
-
-    user = users_collection.find_one({"username": username})
-
-    if not user:
-        return jsonify({"error": "User not found"}), 401
-
-    if not bcrypt.checkpw(password.encode(), user["password"]):
-        return jsonify({"error": "Invalid password"}), 401
-
-    token = jwt.encode({
-        "user": username,
-        "role": user["role"],
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)
-    }, SECRET_KEY, algorithm="HS256")
-
-    return jsonify({"token": token})
-
-
-# -----------------------------
-# AUTH DECORATOR
-# -----------------------------
-def token_required(f):
-
-    def wrapper(*args, **kwargs):
-
-        token = request.headers.get("Authorization")
-
-        if not token:
-            return jsonify({"error": "Token missing"}), 403
-
-        try:
-            decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            request.user = decoded
-        except:
-            return jsonify({"error": "Invalid token"}), 403
-
-        return f(*args, **kwargs)
-
-    wrapper.__name__ = f.__name__
-    return wrapper
-
-
-# -----------------------------
-# ROLE DECORATOR
-# -----------------------------
-def role_required(required_role):
-
-    def decorator(f):
-
-        def wrapper(*args, **kwargs):
-
-            user_role = request.user.get("role")
-
-            if user_role != required_role:
-                return jsonify({"error": "Access denied"}), 403
-
-            return f(*args, **kwargs)
-
-        wrapper.__name__ = f.__name__
-        return wrapper
-
-    return decorator
-
-
-# -----------------------------
-# GET ALL THREATS
-# -----------------------------
-@app.route("/threats", methods=["GET"])
-@token_required
-@limiter.limit("30 per minute")
-def get_threats():
-
-    threats = list(collection.find({}, {"_id": 0}).limit(100))
-    return jsonify(threats)
-
-
-# -----------------------------
-# GET BLOCKED IPS
-# -----------------------------
-@app.route("/blocked", methods=["GET"])
-@token_required
-@limiter.limit("30 per minute")
-def get_blocked():
-
-    threats = list(collection.find(
-        {"status": "active"},
-        {"_id": 0}
-    ))
-
-    return jsonify(threats)
-
-
-# -----------------------------
-# BLOCK IP (ADMIN ONLY)
-# -----------------------------
-@app.route("/block", methods=["POST"])
-@token_required
-@role_required("admin")
-@limiter.limit("10 per minute")
-def block():
-
-    ip = request.json.get("ip")
-
+# ====================== ROLLBACK ENDPOINT ======================
+@app.route('/unblock', methods=['POST'])
+def unblock_ip():
+    data = request.get_json()
+    ip = data.get('ip') or data.get('value')
     if not ip:
-        return jsonify({"error": "IP required"}), 400
+        return jsonify({"error": "IP/value is required"}), 400
 
-    block_ip(ip)
+    try:
+        # Remove from iptables
+        subprocess.run(f"sudo iptables -D INPUT -s {ip} -j DROP", shell=True, check=False)
+        
+        # Optional: mark as unblocked in MongoDB
+        db.iocs.update_one({"value": ip}, {"$set": {"blocked": False}})
+        
+        return jsonify({"status": "success", "message": f"{ip} has been unblocked"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    return jsonify({"message": f"{ip} blocked"})
+# ====================== MAIN DASHBOARD ======================
+@app.route('/')
+def dashboard():
+    # Get data from MongoDB
+    iocs = list(db.iocs.find().sort("risk_score", -1).limit(50))
+    for ioc in iocs:
+        ioc['_id'] = str(ioc['_id'])
 
+    # Get data from Elasticsearch
+    try:
+        es_data = es.search(index="threat_intelligence", size=50, body={
+            "query": {"match_all": {}},
+            "sort": [{"risk_score": "desc"}]
+        })
+        es_iocs = [hit['_source'] for hit in es_data['hits']['hits']]
+    except:
+        es_iocs = []
 
-# -----------------------------
-# UNBLOCK IP (ADMIN ONLY)
-# -----------------------------
-@app.route("/unblock", methods=["POST"])
-@token_required
-@role_required("admin")
-@limiter.limit("10 per minute")
-def unblock():
+    return render_template('dashboard.html', 
+                         mongo_iocs=iocs, 
+                         es_iocs=es_iocs)
 
-    ip = request.json.get("ip")
-
-    if not ip:
-        return jsonify({"error": "IP required"}), 400
-
-    unblock_ip(ip)
-
-    return jsonify({"message": f"{ip} unblocked"})
-
-
-# -----------------------------
-# HEALTH CHECK
-# -----------------------------
-@app.route("/")
-def home():
-    return jsonify({"status": "Secure Threat Intel API running"})
-
-
-# -----------------------------
-# SECURITY HEADERS
-# -----------------------------
-@app.after_request
-def add_security_headers(response):
-
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-
-    return response
-
-
-# -----------------------------
-# RUN
-# -----------------------------
-if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

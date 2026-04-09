@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from elasticsearch import Elasticsearch
 import subprocess
+from datetime import datetime   # ← Added for audit logging
 
 load_dotenv()
 
@@ -26,13 +27,30 @@ def unblock_ip():
         return jsonify({"error": "IP/value is required"}), 400
 
     try:
-        # Remove from iptables
-        subprocess.run(f"sudo iptables -D INPUT -s {ip} -j DROP", shell=True, check=False)
+        # Safer way - no shell=True (prevents command injection)
+        subprocess.run(
+            ["sudo", "iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"],
+            check=True
+        )
         
-        # Optional: mark as unblocked in MongoDB
+        # Mark as unblocked in MongoDB
         db.iocs.update_one({"value": ip}, {"$set": {"blocked": False}})
         
+        # === IMMUTABLE AUDIT LOG (Compliance Requirement) ===
+        db.audit_log.insert_one({
+            "timestamp": datetime.utcnow(),
+            "action": "UNBLOCK",
+            "ioc_value": ip,
+            "reason": "Manual rollback by SOC analyst via API",
+            "source": "api_unblock_endpoint",
+            "user": "admin"
+        })
+        # ====================================================
+        
         return jsonify({"status": "success", "message": f"{ip} has been unblocked"})
+    
+    except subprocess.CalledProcessError:
+        return jsonify({"error": "Failed to remove iptables rule - IP may not be blocked"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -54,8 +72,8 @@ def dashboard():
     except:
         es_iocs = []
 
-    return render_template('dashboard.html', 
-                         mongo_iocs=iocs, 
+    return render_template('dashboard.html',
+                         mongo_iocs=iocs,
                          es_iocs=es_iocs)
 
 if __name__ == '__main__':
